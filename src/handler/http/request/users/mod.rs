@@ -312,8 +312,7 @@ pub async fn delete(
 /// AuthenticateUser
 ///
 /// #{"ratelimit_module":"Users", "ratelimit_module_operation":"update"}#
-#[utoipa::path(
-context_path = "/auth",
+#[utoipa::path(context_path = "/auth",
     tag = "Auth",
     operation_id = "UserLoginCheck",
     request_body(content = SignInUser, description = "User login", content_type = "application/json"),
@@ -399,57 +398,74 @@ pub async fn authentication(
             return unauthorized_error(resp);
         }
     }
-    match crate::handler::http::auth::validator::validate_user(&auth.name, &auth.password).await {
-        Ok(v) => {
-            if v.is_valid {
-                resp.status = true;
-            } else {
-                #[cfg(feature = "enterprise")]
-                audit_unauthorized_error(audit_message).await;
-                return unauthorized_error(resp);
+    // 检查是否有OAuth2 token
+    let oauth2_token = auth.password.clone(); // 复用password字段传递token
+    
+    // 验证OAuth2 token并获取用户信息
+    match crate::handler::http::auth::validator::validate_oauth2_token(&oauth2_token).await {
+        Ok(oauth2_user) => {
+            // 自动创建或更新用户
+            match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
+                Ok(user) => {
+                    resp.status = true;
+                    resp.role = Some("root".to_string()); // 固定返回root角色
+                    
+                    // 生成OpenObserve的认证token（不输出原始token）
+                    let access_token = format!("Bearer {}", oauth2_token);
+                    let tokens = json::to_string(&AuthTokens {
+                        access_token,
+                        refresh_token: "".to_string(),
+                    }).unwrap();
+                    
+                    // 设置cookie
+                    let cfg = get_config();
+                    let tokens = base64::encode(&tokens);
+                    let mut auth_cookie = cookie::Cookie::new("auth_tokens", tokens);
+                    auth_cookie.set_expires(
+                        cookie::time::OffsetDateTime::now_utc()
+                            + cookie::time::Duration::seconds(cfg.auth.cookie_max_age),
+                    );
+                    auth_cookie.set_http_only(true);
+                    auth_cookie.set_secure(cfg.auth.cookie_secure_only);
+                    auth_cookie.set_path("/");
+                    if cfg.auth.cookie_same_site_lax {
+                        auth_cookie.set_same_site(cookie::SameSite::Lax);
+                    } else {
+                        auth_cookie.set_same_site(cookie::SameSite::None);
+                    }
+                    
+                    // audit the successful login
+                    #[cfg(feature = "enterprise")]
+                    audit(audit_message).await;
+                    Ok(HttpResponse::Ok().cookie(auth_cookie).json(resp))
+                }
+                Err(e) => {
+                    log::error!("创建OAuth2用户失败: {}", e);
+                    resp.status = false;
+                    resp.message = Some("用户创建失败".to_string());
+                    Ok(HttpResponse::InternalServerError().json(resp))
+                }
             }
         }
-        Err(_e) => {
-            #[cfg(feature = "enterprise")]
-            audit_unauthorized_error(audit_message).await;
-            return unauthorized_error(resp);
+        Err(e) => {
+            let error_message = e.to_string();
+            log::error!("OAuth2 token验证失败: {}", error_message);
+            
+            // 检查是否是权限不足的错误
+            if error_message.contains("权限不足") {
+                Ok(HttpResponse::Forbidden().json(json!({
+                    "status": false,
+                    "message": "没有访问权限",
+                    "error_type": "permission_denied"
+                })))
+            } else {
+                Ok(HttpResponse::Unauthorized().json(json!({
+                    "status": false,
+                    "message": "OAuth2 token validation failed",
+                    "error_type": "token_validation_failed"
+                })))
+            }
         }
-    };
-    if resp.status {
-        let cfg = get_config();
-
-        let access_token = format!(
-            "Basic {}",
-            base64::encode(&format!("{}:{}", auth.name, auth.password))
-        );
-        let tokens = json::to_string(&AuthTokens {
-            access_token,
-            refresh_token: "".to_string(),
-        })
-        .unwrap();
-
-        let tokens = base64::encode(&tokens);
-        let mut auth_cookie = cookie::Cookie::new("auth_tokens", tokens);
-        auth_cookie.set_expires(
-            cookie::time::OffsetDateTime::now_utc()
-                + cookie::time::Duration::seconds(cfg.auth.cookie_max_age),
-        );
-        auth_cookie.set_http_only(true);
-        auth_cookie.set_secure(cfg.auth.cookie_secure_only);
-        auth_cookie.set_path("/");
-        if cfg.auth.cookie_same_site_lax {
-            auth_cookie.set_same_site(cookie::SameSite::Lax);
-        } else {
-            auth_cookie.set_same_site(cookie::SameSite::None);
-        }
-        // audit the successful login
-        #[cfg(feature = "enterprise")]
-        audit(audit_message).await;
-        Ok(HttpResponse::Ok().cookie(auth_cookie).json(resp))
-    } else {
-        #[cfg(feature = "enterprise")]
-        audit_unauthorized_error(audit_message).await;
-        unauthorized_error(resp)
     }
 }
 
@@ -789,6 +805,113 @@ pub async fn list_invitations(user_email: UserEmail) -> Result<HttpResponse, Err
 #[get("/invites")]
 pub async fn list_invitations(_user_email: UserEmail) -> Result<HttpResponse, Error> {
     Ok(HttpResponse::Forbidden().json("Not Supported"))
+}
+
+// 添加新的OAuth2登录端点
+#[utoipa::path(
+    context_path = "/api",
+    tag = "Users",
+    operation_id = "OAuth2Login",
+    security(
+        ("Authorization"= [])
+    ),
+    responses(
+        (status = 200, description = "Success", content_type = "application/json"),
+        (status = 401, description = "Unauthorized"),
+    )
+)]
+#[post("/oauth2-login")]
+pub async fn oauth2_login(
+    req: HttpRequest,
+) -> Result<HttpResponse, Error> {
+    // 从请求头或查询参数获取token
+    let token = req
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.replace("Bearer ", ""))
+        .or_else(|| {
+            // 从查询参数获取
+            req.query_string()
+                .split('&')
+                .find(|s| s.starts_with("access_token="))
+                .and_then(|s| s.strip_prefix("access_token="))
+                .map(|s| s.to_string())
+        })
+        .ok_or_else(|| HttpResponse::BadRequest().json("Missing access_token"))?;
+    
+    // 验证token并获取用户信息
+    match crate::handler::http::auth::validator::validate_oauth2_token(&token).await {
+        Ok(oauth2_user) => {
+            // 自动创建或更新用户
+            match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
+                Ok(user) => {
+                    // 生成OpenObserve的认证token（不输出原始token）
+                    let access_token = format!("Bearer {}", token);
+                    let tokens = json::to_string(&AuthTokens {
+                        access_token,
+                        refresh_token: "".to_string(),
+                    }).unwrap();
+                    
+                    // 设置cookie
+                    let cfg = get_config();
+                    let tokens = base64::encode(&tokens);
+                    let mut auth_cookie = cookie::Cookie::new("auth_tokens", tokens);
+                    auth_cookie.set_expires(
+                        cookie::time::OffsetDateTime::now_utc()
+                            + cookie::time::Duration::seconds(cfg.auth.cookie_max_age),
+                    );
+                    auth_cookie.set_http_only(true);
+                    auth_cookie.set_secure(cfg.auth.cookie_secure_only);
+                    auth_cookie.set_path("/");
+                    if cfg.auth.cookie_same_site_lax {
+                        auth_cookie.set_same_site(cookie::SameSite::Lax);
+                    } else {
+                        auth_cookie.set_same_site(cookie::SameSite::None);
+                    }
+                    
+                    Ok(HttpResponse::Ok().cookie(auth_cookie).json(json!({
+                        "status": true,
+                        "user": {
+                            "id": user.id,
+                            "email": user.email,
+                            "first_name": user.first_name,
+                            "last_name": user.last_name,
+                            "role": "root", // 固定返回root角色
+                            "org": user.org
+                        },
+                        "message": "OAuth2 login successful"
+                    })))
+                }
+                Err(e) => {
+                    log::error!("创建OAuth2用户失败: {}", e);
+                    Ok(HttpResponse::InternalServerError().json(json!({
+                        "status": false,
+                        "message": "用户创建失败"
+                    })))
+                }
+            }
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            log::error!("OAuth2 token验证失败: {}", error_message);
+            
+            // 检查是否是权限不足的错误
+            if error_message.contains("权限不足") {
+                Ok(HttpResponse::Forbidden().json(json!({
+                    "status": false,
+                    "message": "没有访问权限",
+                    "error_type": "permission_denied"
+                })))
+            } else {
+                Ok(HttpResponse::Unauthorized().json(json!({
+                    "status": false,
+                    "message": "OAuth2 token validation failed",
+                    "error_type": "token_validation_failed"
+                })))
+            }
+        }
+    }
 }
 
 #[cfg(test)]

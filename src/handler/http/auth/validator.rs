@@ -1047,6 +1047,104 @@ fn extract_full_url(req: &ServiceRequest) -> String {
     format!("{scheme}://{host}{path}")
 }
 
+// 添加新的用户结构体，包含角色信息
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OAuth2User {
+    pub id: String,
+    pub realname: String,
+    pub account: String,    // 用户账号
+    pub tenantId: String,   // 直接获取tenantId
+    #[serde(default)]
+    pub authorities: Vec<Authority>, // 用户权限列表
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Authority {
+    pub authority: String,
+}
+
+// 添加角色权限配置
+#[derive(Debug, Clone)]
+pub struct RoleConfig {
+    pub required_roles: Vec<String>,
+}
+
+impl Default for RoleConfig {
+    fn default() -> Self {
+        Self {
+            required_roles: vec!["root".to_string()], // 默认允许root角色
+        }
+    }
+}
+
+// 添加OAuth2 token验证函数，包含角色权限判断
+pub async fn validate_oauth2_token(token: &str) -> Result<OAuth2User, Box<dyn std::error::Error>> {
+    let client = reqwest::Client::new();
+    let cfg = get_config();
+    
+    // 从配置中获取OAuth2用户信息接口地址
+    let response = client
+        .get(&cfg.common.oauth2_userinfo_url)
+        .bearer_auth(token.replace("Bearer ", ""))
+        .send()
+        .await?;
+    
+    let data: serde_json::Value = response.json().await?;
+    
+    // 直接从JSON中解析用户信息，类似你的Java代码
+    let user = OAuth2User {
+        id: data["principal"]["id"].as_str().unwrap_or("").to_string(),
+        realname: data["principal"]["realname"].as_str().unwrap_or("").to_string(),
+        account: data["name"].as_str().unwrap_or("").to_string(),
+        tenantId: data["tenantId"].as_str().unwrap_or("").to_string(),
+        authorities: data["principal"]["authorities"]
+            .as_array()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|auth| Authority {
+                authority: auth["authority"].as_str().unwrap_or("").to_string(),
+            })
+            .collect(),
+    };
+    
+    // 角色权限判断
+    match check_user_authorities(&user).await {
+        Ok(_) => Ok(user),
+        Err(e) => Err(e)
+    }
+}
+
+// 添加角色权限检查函数
+async fn check_user_authorities(user: &OAuth2User) -> Result<bool, Box<dyn std::error::Error>> {
+    let cfg = get_config();
+    
+    // 从配置中获取允许的角色（可以通过环境变量设置）
+    let allowed_roles = std::env::var("ZO_OAUTH2_ALLOWED_ROLES")
+        .unwrap_or_else(|_| "ROLE_ADMIN".to_string()) // 默认允许ROLE_ADMIN角色
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect::<Vec<String>>();
+    
+    if allowed_roles.is_empty() {
+        // 如果没有配置角色限制，默认允许访问
+        return Ok(true);
+    }
+    
+    // 检查用户是否有允许的角色
+    for authority in &user.authorities {
+        if allowed_roles.contains(&authority.authority) {
+            return Ok(true);
+        }
+    }
+    
+    // 用户没有允许的角色，返回简单错误信息
+    log::warn!("用户 {} 权限不足，允许的角色: {:?}, 用户角色: {:?}", 
+        user.realname, allowed_roles, 
+        user.authorities.iter().map(|a| &a.authority).collect::<Vec<_>>());
+    
+    Err("没有访问权限".into())
+}
+
 #[cfg(test)]
 mod tests {
     use actix_web::test;

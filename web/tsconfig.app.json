@@ -4,9 +4,19 @@
   "compilerOptions": {
     "composite": true,
     "baseUrl": ".",
+    "target": "es2020",
+    "useDefineForClassFields": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "strict": true,
+    "jsx": "preserve",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "sourceMap": true,
+    "lib": ["es2020", "dom", "dom.iterable"],
+    "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"]
     }

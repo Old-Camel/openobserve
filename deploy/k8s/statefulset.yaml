@@ -1,80 +1,105 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: openobserve
-  namespace: openobserve
-spec:
-  clusterIP: None
-  selector:
-    app: openobserve
-  ports:
-  - name: http
-    port: 5080
-    targetPort: 5080
-
----
-
-# create statefulset
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: openobserve
-  namespace: openobserve
   labels:
-    name: openobserve
+    app: openobserve
 spec:
   serviceName: openobserve
   replicas: 1
   selector:
     matchLabels:
-      name: openobserve
       app: openobserve
   template:
     metadata:
       labels:
-        name: openobserve
         app: openobserve
     spec:
-      securityContext:
-        fsGroup: 2000
-        runAsUser: 10000
-        runAsGroup: 3000
-        runAsNonRoot: true
-      # terminationGracePeriodSeconds: 0
       containers:
-        - name: openobserve
-          image: o2cr.ai/openobserve/openobserve:latest
-          env:
-            - name: ZO_ROOT_USER_EMAIL
-              value: root@example.com
-            - name: ZO_ROOT_USER_PASSWORD
-              value: Complexpass#123
-            - name: ZO_DATA_DIR
-              value: /data
-          # command: ["/bin/bash", "-c", "while true; do sleep 1; done"]
-          imagePullPolicy: Always
-          resources:
-            limits:
-              cpu: 4096m
-              memory: 2048Mi
-            requests:
-              cpu: 256m
-              memory: 50Mi
-          ports:
-            - containerPort: 5080
-              name: http
-          volumeMounts:
-          - name: data
-            mountPath: /data
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      # storageClassName: default
-      # NOTE: You can increase the storage size
-      resources:
-        requests:
-          storage: 10Gi
+      - name: openobserve
+        image: public.ecr.aws/zinclabs/openobserve:latest
+        ports:
+        - containerPort: 5080
+          name: http
+        - containerPort: 5081
+          name: grpc
+        env:
+        - name: ZO_ROOT_USER_EMAIL
+          value: "admin@admin.com"
+        - name: ZO_ROOT_USER_PASSWORD
+          value: "admin"
+        - name: ZO_BASE_URI
+          value: "/openobserve"
+        - name: ZO_OAUTH2_ALLOWED_ROLES
+          value: "root"
+        - name: ZO_OAUTH2_USERINFO_URL
+          value: "http://your-oauth2-server/userinfo"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: config
+          mountPath: /config.env
+          subPath: config.env
+        livenessProbe:
+          httpGet:
+            path: /openobserve/health
+            port: 5080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /openobserve/health
+            port: 5080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: openobserve-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openobserve-config
+data:
+  config.env: |
+    # OpenObserve OAuth2 Configuration
+    # OAuth2角色权限配置 - 现在默认使用root
+    ZO_OAUTH2_ALLOWED_ROLES=root
+    
+    # OAuth2用户信息接口地址 - 请替换为您的实际OAuth2服务器地址
+    ZO_OAUTH2_USERINFO_URL=http://your-oauth2-server/userinfo
+    
+    # 其他配置
+    ZO_BASE_URI=/openobserve
+    ZO_ROOT_USER_EMAIL=admin@admin.com
+    ZO_ROOT_USER_PASSWORD=admin
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openobserve
+  labels:
+    app: openobserve
+spec:
+  ports:
+  - port: 5080
+    targetPort: 5080
+    name: http
+  - port: 5081
+    targetPort: 5081
+    name: grpc
+  selector:
+    app: openobserve
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openobserve-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
 

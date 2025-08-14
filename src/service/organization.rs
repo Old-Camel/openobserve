@@ -14,7 +14,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use config::{
-    ider,
+    ider,get_config,
     meta::{
         alerts::alert::ListAlertsParams,
         dashboards::ListDashboardsParams,
@@ -24,6 +24,7 @@ use config::{
     },
     utils::rand::generate_random_string,
 };
+
 use infra::table::{self, org_users::UserOrgExpandedRecord};
 #[cfg(feature = "enterprise")]
 use o2_openfga::config::get_config as get_openfga_config;
@@ -172,7 +173,12 @@ async fn update_passcode_inner(
         local_org_id = org_id;
     }
     let token = generate_random_string(16);
-    let rum_token = format!("rum{}", generate_random_string(16));
+    let cfg = get_config();
+    let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+        cfg.auth.fixed_rum_token.clone()
+    } else {
+        format!("rum{}", generate_random_string(16))
+    };
 
     if !is_root_user(user_id) {
         let orgs = db_user
@@ -549,7 +555,14 @@ pub async fn accept_invitation(user_email: &str, invite_token: &str) -> Result<(
         user_email,
         invite_role,
         &generate_random_string(16),
-        Some(format!("rum{}", generate_random_string(16))),
+        Some({
+            let cfg = get_config();
+            if !cfg.auth.fixed_rum_token.is_empty() {
+                cfg.auth.fixed_rum_token.clone()
+            } else {
+                format!("rum{}", generate_random_string(16))
+            }
+        }),
     )
     .await
     .map_err(|_| anyhow::anyhow!("Failed to add user to org"))?;

@@ -249,6 +249,7 @@ pub fn get_basic_routes(svc: &mut web::ServiceConfig) {
         web::scope("/auth")
             .wrap(cors.clone())
             .service(users::authentication)
+            .service(users::oauth2_login)
             .service(users::get_presigned_url)
             .service(users::get_auth),
     );

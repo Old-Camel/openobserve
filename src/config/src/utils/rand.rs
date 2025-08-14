@@ -22,6 +22,18 @@ pub fn get_rand_element<T>(arr: &[T]) -> &T {
 }
 
 pub fn generate_random_string(len: usize) -> String {
+    // 使用随机生成
+    Alphanumeric.sample_string(&mut rand::thread_rng(), len)
+}
+
+// 新增：从配置中读取固定RUM令牌的函数
+pub fn generate_random_string_with_config(len: usize, fixed_rum_token: &str) -> String {
+    if !fixed_rum_token.is_empty() {
+        // 如果配置中设置了固定RUM令牌，直接返回
+        return fixed_rum_token.to_string();
+    }
+    
+    // 否则使用随机生成
     Alphanumeric.sample_string(&mut rand::thread_rng(), len)
 }
 

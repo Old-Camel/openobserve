@@ -23,7 +23,7 @@ use config::meta::ratelimit::CachedUserRoles;
 use config::{
     META_ORG_ID, get_config, ider,
     meta::user::{DBUser, User, UserOrg, UserRole},
-    utils::rand::generate_random_string,
+    utils::rand::{generate_random_string, generate_random_string_with_config},
 };
 use hashbrown::HashMap;
 use infra::table::org_users::OrgUserRecord;
@@ -147,7 +147,11 @@ pub async fn post_user(
             let password = get_hash(&usr_req.password, &salt);
             let password_ext = get_hash(&usr_req.password, &cfg.auth.ext_auth_salt);
             let token = generate_random_string(16);
-            let rum_token = format!("rum{}", generate_random_string(16));
+            let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+                cfg.auth.fixed_rum_token.clone()
+            } else {
+                format!("rum{}", generate_random_string(16))
+            };
             let org_id = org_id.replace(' ', "_");
             let user = usr_req.to_new_dbuser(
                 password,
@@ -235,7 +239,12 @@ pub async fn create_new_user(mut db_user: DBUser) -> Result<(), anyhow::Error> {
             org.token = token;
         };
         if org.rum_token.is_none() {
-            let rum_token = format!("rum{}", generate_random_string(16));
+            let cfg = get_config();
+            let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+                cfg.auth.fixed_rum_token.clone()
+            } else {
+                format!("rum{}", generate_random_string(16))
+            };
             org.rum_token = Some(rum_token);
         };
     }
@@ -573,7 +582,12 @@ pub async fn add_admin_to_org(org_id: &str, user_email: &str) -> Result<(), anyh
             return Err(anyhow::anyhow!("User not found"));
         }
         let token = generate_random_string(16);
-        let rum_token = format!("rum{}", generate_random_string(16));
+        let cfg = get_config();
+        let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+            cfg.auth.fixed_rum_token.clone()
+        } else {
+            format!("rum{}", generate_random_string(16))
+        };
         // Add user to the organization
         db::org_users::add(org_id, user_email, UserRole::Admin, &token, Some(rum_token)).await?;
 
@@ -649,7 +663,12 @@ pub async fn add_user_to_org(
 
         if is_allowed {
             let token = generate_random_string(16);
-            let rum_token = format!("rum{}", generate_random_string(16));
+            let cfg = get_config();
+            let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+                cfg.auth.fixed_rum_token.clone()
+            } else {
+                format!("rum{}", generate_random_string(16))
+            };
             let is_member = db::org_users::get(org_id, &email).await.is_ok();
             if is_member {
                 return Ok(HttpResponse::Conflict().json(MetaHttpResponse::error(
@@ -1110,13 +1129,17 @@ pub(crate) async fn create_root_user(
         .token
         .clone()
         .unwrap_or_else(|| generate_random_string(16));
-    let rum_token = format!(
-        "rum{}",
-        user_req
-            .token
-            .clone()
-            .unwrap_or_else(|| generate_random_string(16))
-    );
+    let rum_token = if !cfg.auth.fixed_rum_token.is_empty() {
+        cfg.auth.fixed_rum_token.clone()
+    } else {
+        format!(
+            "rum{}",
+            user_req
+                .token
+                .clone()
+                .unwrap_or_else(|| generate_random_string(16))
+        )
+    };
     let user = user_req.to_new_dbuser(
         password,
         salt,

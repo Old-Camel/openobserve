@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openobserve-data
+  namespace: openobserve
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openobserve
+  namespace: openobserve
+  labels:
+    app: openobserve
+spec:
+  clusterIP: None
+  selector:
+    app: openobserve
+  ports:
+  - name: http
+    port: 5080
+    targetPort: 5080
+  - port: 5081
+    name: grpc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openobserve-v1
+  namespace: openobserve
+  labels:
+    app: openobserve
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openobserve
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: openobserve
+        version: v1
+      annotations:
+        traffic.sidecar.istio.io/excludeOutboundIPRanges: 0.0.0.0/0
+    spec:
+      securityContext:
+        fsGroup: 2000
+        runAsUser: 10000
+        runAsGroup: 3000
+        runAsNonRoot: true
+      containers:
+        - name: openobserve
+          image: harbor.yunzainfo.com:10000/cloud/openobserve:v1
+          env:
+             - name: ZO_DATA_DIR
+               value: /data
+             - name: ZO_BASE_URI
+               value: /openobserve
+             - name: ZO_OAUTH2_ALLOWED_ROLES
+               value: ROLE_ADMIN
+             - name: ZO_OAUTH2_USERINFO_URL
+               value: http://auth:3000/auth/user
+             - name: ZO_FIXED_RUM_TOKEN
+               value: Xl2kv3XhC9Bb3Fac
+          imagePullPolicy: Always
+          readinessProbe:
+            httpGet:
+              port: 5080
+              path: /openobserve/config
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              port: 5080
+              path: /openobserve/config
+            initialDelaySeconds: 60
+            timeoutSeconds: 10
+            periodSeconds: 60
+            failureThreshold: 5
+          resources:
+            limits:
+              cpu: 4096m
+              memory: 2048Mi
+            requests:
+              cpu: 256m
+              memory: 50Mi
+          ports:
+          - containerPort: 5080
+            name: http
+          - containerPort: 5081
+            name: grpc
+          volumeMounts:
+          - name: data
+            mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: openobserve-data

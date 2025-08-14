@@ -52,6 +52,10 @@ const http = ({ headers } = {} as any) => {
                 error.response.data["error"] || "Invalid credentials"
               )
             );
+            
+            // 检查是否是OAuth2登录相关的请求
+            const isOAuth2LoginRequest = error.config.url.includes("/auth/oauth2-login");
+            
             if (
               config.isCloud == "true" &&
               !error.request.responseURL.includes("/auth/login")
@@ -91,21 +95,25 @@ const http = ({ headers } = {} as any) => {
                     return Promise.reject(refreshError);
                   });
                 });
-            } else {
-              if (!error.request.responseURL.includes("/login")) {
-                store.dispatch("logout");
-                useLocalCurrentUser("", true);
-                useLocalUserInfo("", true);
-                sessionStorage.clear();
-                window.location.reload();
-              }
+            } else if (!isOAuth2LoginRequest && !error.request.responseURL.includes("/login")) {
+              // 对于非OAuth2登录请求的401错误，清除认证信息
+              console.log("Token expired, clearing authentication");
+              
+              // 清除认证信息
+              store.dispatch("logout");
+              useLocalCurrentUser("", true);
+              useLocalUserInfo("", true);
+              sessionStorage.clear();
+              localStorage.removeItem("oauth2_token");
+              
+              // 不进行跳转，只清除token
+              console.log('Authentication cleared, please login again');
             }
             break;
           case 403:
             if (config.isEnterprise == "true" || config.isCloud == "true") {
               Notify.create({
-                message:
-                  "Unauthorized Access: You are not authorized to perform this operation, please contact your administrator.",
+                message: "没有访问权限",
                 timeout: 0, // This ensures the notification does not close automatically
                 color: "negative", // Customize color as needed
                 position: "top",
@@ -120,7 +128,7 @@ const http = ({ headers } = {} as any) => {
             }
             console.log(
               JSON.stringify(
-                error.response.data["error"] || "Unauthorized Access"
+                error.response.data["error"] || "没有访问权限"
               )
             );
             break;

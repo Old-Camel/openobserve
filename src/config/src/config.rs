@@ -570,12 +570,14 @@ pub struct Profiling {
 
 #[derive(EnvConfig, Default)]
 pub struct Auth {
-    #[env_config(name = "ZO_ROOT_USER_EMAIL")]
+    #[env_config(name = "ZO_ROOT_USER_EMAIL", default = "yunzai@yunzai.com")]
     pub root_user_email: String,
-    #[env_config(name = "ZO_ROOT_USER_PASSWORD")]
+    #[env_config(name = "ZO_ROOT_USER_PASSWORD", default = "yunzai")]
     pub root_user_password: String,
     #[env_config(name = "ZO_ROOT_USER_TOKEN")]
     pub root_user_token: String,
+    #[env_config(name = "ZO_FIXED_RUM_TOKEN", default = "")]
+    pub fixed_rum_token: String,
     #[env_config(name = "ZO_COOKIE_MAX_AGE", default = 2592000)] // seconds, 30 days
     pub cookie_max_age: i64,
     #[env_config(name = "ZO_COOKIE_SAME_SITE_LAX", default = true)]
@@ -731,10 +733,12 @@ pub struct Common {
     pub instance_name_short: String,
     #[env_config(name = "ZO_INGESTION_URL", default = "")]
     pub ingestion_url: String,
-    #[env_config(name = "ZO_WEB_URL", default = "http://localhost:5080")]
+    #[env_config(name = "ZO_WEB_URL", default = "")]
     pub web_url: String,
     #[env_config(name = "ZO_BASE_URI", default = "")] // /abc
     pub base_uri: String,
+    #[env_config(name = "ZO_OAUTH2_USERINFO_URL", default = "http://your-oauth2-server/userinfo")]
+    pub oauth2_userinfo_url: String,
     #[env_config(name = "ZO_DATA_DIR", default = "./data/openobserve/")]
     pub data_dir: String,
     #[env_config(name = "ZO_DATA_WAL_DIR", default = "")] // ./data/openobserve/wal/
@@ -2402,7 +2406,18 @@ fn check_http_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
 }
 
 fn check_path_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
-    // for web
+    // for web - auto-detect web_url if not set
+    if cfg.common.web_url.is_empty() {
+        // Try to get from environment variable first
+        if let Ok(url) = std::env::var("ZO_WEB_URL") {
+            cfg.common.web_url = url;
+        } else {
+            // Try to get from HTTP headers (X-Forwarded-Host, X-Forwarded-Proto, Host)
+            // This will be handled at runtime when processing requests
+            cfg.common.web_url = "auto".to_string();
+        }
+    }
+    
     if cfg.common.web_url.ends_with('/') {
         cfg.common.web_url = cfg.common.web_url.trim_end_matches('/').to_string();
     }

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use config::meta::user::{DBUser, User, UserOrg, UserRole};
+pub(crate) use config::meta::user::{DBUser, User, UserOrg, UserRole};
 #[cfg(feature = "cloud")]
 use o2_enterprise::enterprise::cloud::OrgInviteStatus;
 use serde::{Deserialize, Serialize};
