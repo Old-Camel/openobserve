@@ -1053,7 +1053,7 @@ pub struct OAuth2User {
     pub id: String,
     pub realname: String,
     pub account: String,    // 用户账号
-    pub tenantId: String,   // 直接获取tenantId
+    pub tenant_id: String,   // 直接获取tenantId
     #[serde(default)]
     pub authorities: Vec<Authority>, // 用户权限列表
 }
@@ -1096,7 +1096,7 @@ pub async fn validate_oauth2_token(token: &str) -> Result<OAuth2User, Box<dyn st
         id: data["principal"]["id"].as_str().unwrap_or("").to_string(),
         realname: data["principal"]["realname"].as_str().unwrap_or("").to_string(),
         account: data["name"].as_str().unwrap_or("").to_string(),
-        tenantId: data["tenantId"].as_str().unwrap_or("").to_string(),
+        tenant_id: data["tenantId"].as_str().unwrap_or("").to_string(),
         authorities: data["principal"]["authorities"]
             .as_array()
             .unwrap_or(&vec![])
@@ -1116,7 +1116,7 @@ pub async fn validate_oauth2_token(token: &str) -> Result<OAuth2User, Box<dyn st
 
 // 添加角色权限检查函数
 async fn check_user_authorities(user: &OAuth2User) -> Result<bool, Box<dyn std::error::Error>> {
-    let cfg = get_config();
+    let _cfg = get_config();
     
     // 从配置中获取允许的角色（可以通过环境变量设置）
     let allowed_roles = std::env::var("ZO_OAUTH2_ALLOWED_ROLES")

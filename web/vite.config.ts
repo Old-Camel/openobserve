@@ -128,7 +128,7 @@ export default defineConfig({
       plugins: [
         nodePolyfills() as any,
         visualizer({
-          open: true,
+          open: process.env.NODE_ENV !== 'production' && !process.env.DISABLE_VISUALIZER_OPEN,
           gzipSize: true,
           brotliSize: true,
         }),

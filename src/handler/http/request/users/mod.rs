@@ -14,6 +14,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{collections::HashMap, io::Error, sync::Arc};
+use serde_json::json; // 引入 json! 宏
 
 use actix_web::{
     HttpRequest, HttpResponse, cookie, delete, get,
@@ -406,9 +407,9 @@ pub async fn authentication(
         Ok(oauth2_user) => {
             // 自动创建或更新用户
             match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
-                Ok(user) => {
+                Ok(_user) => {
                     resp.status = true;
-                    resp.role = Some("root".to_string()); // 固定返回root角色
+                    resp.message = "OK".to_string();
                     
                     // 生成OpenObserve的认证token（不输出原始token）
                     let access_token = format!("Bearer {}", oauth2_token);
@@ -442,7 +443,7 @@ pub async fn authentication(
                 Err(e) => {
                     log::error!("创建OAuth2用户失败: {}", e);
                     resp.status = false;
-                    resp.message = Some("用户创建失败".to_string());
+                    resp.message = "用户创建失败".to_string();
                     Ok(HttpResponse::InternalServerError().json(resp))
                 }
             }
@@ -825,7 +826,7 @@ pub async fn oauth2_login(
     req: HttpRequest,
 ) -> Result<HttpResponse, Error> {
     // 从请求头或查询参数获取token
-    let token = req
+    let token = match req
         .headers()
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
@@ -837,8 +838,10 @@ pub async fn oauth2_login(
                 .find(|s| s.starts_with("access_token="))
                 .and_then(|s| s.strip_prefix("access_token="))
                 .map(|s| s.to_string())
-        })
-        .ok_or_else(|| HttpResponse::BadRequest().json("Missing access_token"))?;
+        }) {
+        Some(t) => t,
+        None => return Ok(HttpResponse::BadRequest().json("Missing access_token")),
+    };
     
     // 验证token并获取用户信息
     match crate::handler::http::auth::validator::validate_oauth2_token(&token).await {
@@ -873,7 +876,6 @@ pub async fn oauth2_login(
                     Ok(HttpResponse::Ok().cookie(auth_cookie).json(json!({
                         "status": true,
                         "user": {
-                            "id": user.id,
                             "email": user.email,
                             "first_name": user.first_name,
                             "last_name": user.last_name,

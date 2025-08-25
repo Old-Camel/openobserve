@@ -23,7 +23,7 @@ use config::meta::ratelimit::CachedUserRoles;
 use config::{
     META_ORG_ID, get_config, ider,
     meta::user::{DBUser, User, UserOrg, UserRole},
-    utils::rand::{generate_random_string, generate_random_string_with_config},
+    utils::rand::generate_random_string,
 };
 use hashbrown::HashMap;
 use infra::table::org_users::OrgUserRecord;

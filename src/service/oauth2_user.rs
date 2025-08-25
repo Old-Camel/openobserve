@@ -1,11 +1,11 @@
 use crate::{
-    service::{db, users},
+    service::db,
     common::utils::auth::get_hash,
 };
 use config::{
-    META_ORG_ID, get_config, ider,
+    get_config,
     meta::user::{DBUser, User, UserOrg, UserRole},
-    utils::rand::{generate_random_string, generate_random_string_with_config},
+    utils::rand::generate_random_string,
 };
 use anyhow::Result;
 use log;
@@ -13,7 +13,7 @@ use log;
 // 根据OAuth2用户信息自动创建或更新用户
 pub async fn create_or_update_oauth2_user(oauth2_user: &crate::handler::http::auth::validator::OAuth2User) -> Result<User> {
     // 生成email: account@tenantId.com (添加.com后缀)
-    let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenantId);
+    let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenant_id);
     
     // 使用default组织
     let org_id = "default";
@@ -64,7 +64,7 @@ async fn update_existing_user(mut existing_user: User, oauth2_user: &crate::hand
 
 // 创建新用户
 async fn create_new_user(oauth2_user: &crate::handler::http::auth::validator::OAuth2User) -> Result<User> {
-    let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenantId);
+    let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenant_id);
     
     // 使用固定密码（OAuth2用户不需要随机密码）
     let password = "oldcamel".to_string();

@@ -61,7 +61,7 @@ ZO_BASE_URI=/openobserve
 ### 重要说明
 
 - **ZO_OAUTH2_USERINFO_URL**: 这是获取OAuth2用户信息的接口地址，必须配置为您的实际OAuth2服务器地址
-- **ZO_OAUTH2_ALLOWED_ROLES**: 控制允许访问的角色，默认设置为"root"
+- **ZO_OAUTH2_ALLOWED_ROLES**: 控制允许访问的角色，默认设置为"ROLE_ADMIN"
 
 ## 使用方法
 
@@ -75,30 +75,6 @@ ZO_BASE_URI=/openobserve
 - 该接口应返回包含用户信息的JSON响应
 - 通过环境变量 `ZO_OAUTH2_ALLOWED_ROLES` 控制允许的角色
 
-## 部署说明
 
-### Docker Compose
-```bash
-docker-compose up -d
-```
 
-### Kubernetes
-```bash
-kubectl apply -f deploy/k8s/statefulset.yaml
-```
 
-### 环境变量配置
-确保在部署时设置正确的环境变量，特别是 `ZO_OAUTH2_USERINFO_URL`。
-
-## 安全注意事项
-
-1. **Token安全**: 系统不会在任何地方输出或显示原始OAuth2 token
-2. **用户权限**: 所有OAuth2用户都具有root权限，请谨慎使用
-3. **接口安全**: 确保OAuth2用户信息接口的安全性
-
-## 故障排除
-
-1. 检查环境变量是否正确设置
-2. OAuth2服务器是否可访问
-3. 网络连接是否正常
-4. 查看后端日志获取详细错误信息

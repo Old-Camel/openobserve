@@ -61,16 +61,18 @@ spec:
         - name: openobserve
           image: harbor.yunzainfo.com:10000/cloud/openobserve:v1
           env:
-             - name: ZO_DATA_DIR
-               value: /data
-             - name: ZO_BASE_URI
-               value: /openobserve
              - name: ZO_OAUTH2_ALLOWED_ROLES
                value: ROLE_ADMIN
+             - name: ZO_BASE_URI
+               value: /openobserve
+             - name: ZO_WEB_URL
+               value: ${BACKSTAGE_URL}
              - name: ZO_OAUTH2_USERINFO_URL
                value: http://auth:3000/auth/user
              - name: ZO_FIXED_RUM_TOKEN
                value: Xl2kv3XhC9Bb3Fac
+             - name: ZO_DATA_DIR
+               value: /data
           imagePullPolicy: Always
           readinessProbe:
             httpGet:
