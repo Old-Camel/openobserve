@@ -1,0 +1,1 @@
+### minio创建BUCKET openserve

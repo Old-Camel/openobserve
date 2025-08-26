@@ -20,7 +20,7 @@ import config from "../aws-exports";
 import { Notify } from "quasar";
 import { useLocalUserInfo, useLocalCurrentUser } from "@/utils/zincutils";
 
-const http = ({ headers } = {} as any) => {
+const http = ({ headers={},baseURL } = {} as any) => {
   let instance: AxiosInstance;
 
   headers = {
@@ -30,7 +30,7 @@ const http = ({ headers } = {} as any) => {
   instance = axios.create({
     // timeout: 10000,
     withCredentials: true,
-    baseURL: store.state.API_ENDPOINT,
+    baseURL: baseURL||store.state.API_ENDPOINT,
     headers,
   });
 

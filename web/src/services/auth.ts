@@ -34,7 +34,7 @@ const auth = {
 
   // CAS token验证方法
   validateCasToken: (callback: string) => {
-    return http().get(`/backstage/cas-proxy/app/validate_full?callback=${callback}`);
+    return http({baseURL:window.location.origin}).get(`/backstage/cas-proxy/app/validate_full?callback=${callback}`);
   },
 
   // 通过token获取用户信息

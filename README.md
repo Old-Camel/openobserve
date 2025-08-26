@@ -245,3 +245,8 @@ Easiest way to get support is to join the [Slack channel](https://short.openobse
 ### 📱 Join OpenObserve community on WeChat
 
 <img src="./screenshots/wechat_qr.jpg" width="300">
+
+
+
+
+kubectl label node 222.30.195.130  openobserve-node=true --overwrite

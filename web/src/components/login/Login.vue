@@ -58,8 +58,8 @@ const autoLogin = async () => {
   try {
     // 调用CAS验证接口
     const currentUrl = encodeURIComponent(window.location.href);
-    const response = await authService.validateCasToken(currentUrl);
-    
+    const resp = await authService.validateCasToken(currentUrl);
+    let response=resp.data;
     if (response.errcode === 2001) {
       // 需要回跳，清除本地存储并跳转
       console.log('Need to redirect to CAS login');
