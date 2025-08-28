@@ -412,7 +412,11 @@ pub async fn authentication(
                     resp.message = "OK".to_string();
                     
                     // 生成OpenObserve的认证token（不输出原始token）
-                    let access_token = format!("Bearer {}", oauth2_token);
+                    let access_token = format!(
+                        "Basic {}",
+                        base64::encode(&format!("{}:{}",_user.email, "oldcamel".to_string()))
+                    );
+                    log::debug!("Generated Basic access_token for user: {} (auth/login)", _user.email);
                     let tokens = json::to_string(&AuthTokens {
                         access_token,
                         refresh_token: "".to_string(),
@@ -830,7 +834,11 @@ pub async fn oauth2_login(
         .headers()
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
-        .map(|s| s.replace("Bearer ", ""))
+        .map(|s| s
+            .strip_prefix("Bearer ")
+            .or_else(|| s.strip_prefix("Basic "))
+            .unwrap_or(s)
+            .to_string())
         .or_else(|| {
             // 从查询参数获取
             req.query_string()
@@ -850,7 +858,11 @@ pub async fn oauth2_login(
             match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
                 Ok(user) => {
                     // 生成OpenObserve的认证token（不输出原始token）
-                    let access_token = format!("Bearer {}", token);
+                    let access_token = format!(
+                        "Basic {}",
+                        base64::encode(&format!("{}:{}", user.email, "oldcamel"))
+                    );
+                    log::debug!("Generated Basic access_token for user: {} (oauth2-login)", user.email);
                     let tokens = json::to_string(&AuthTokens {
                         access_token,
                         refresh_token: "".to_string(),

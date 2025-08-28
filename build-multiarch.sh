@@ -206,13 +206,8 @@ echo ""
 log_info "构建结果:"
 echo "  多架构版本: ${PUBLIC_IMAGE_NAME}:${VERSION_TAG} (支持 AMD64 和 ARM64)"
 
-# 可选：推送缓存镜像
-echo ""
-read -p "是否推送缓存镜像到仓库？(y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    log_info "推送缓存镜像..."
-    docker buildx build \
+log_info "推送缓存镜像..."
+docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --cache-from type=local,src="$CACHE_DIR" \
         --cache-to type=registry,ref="${PUBLIC_IMAGE_NAME}:cache",mode=max \
@@ -220,24 +215,11 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         -t ${PUBLIC_IMAGE_NAME}:cache-temp \
         . \
         --push > /dev/null 2>&1
-    log_info "缓存镜像已推送"
-fi
+log_info "缓存镜像已推送"
 
 log_info "脚本执行完毕！"
 
-# 询问是否清理缓存
-echo ""
-read -p "是否清理构建缓存？(y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    log_info "清理构建缓存..."
-    rm -rf "$CACHE_DIR"
-    docker buildx prune -f
-    log_info "缓存已清理"
-else
-    log_info "缓存已保留，下次构建将使用缓存加速"
-    check_cache_status "$CACHE_DIR"
-fi
+
 
 # 清理临时文件
 rm -f .dockerignore

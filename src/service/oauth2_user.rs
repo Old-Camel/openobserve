@@ -18,8 +18,13 @@ pub async fn create_or_update_oauth2_user(oauth2_user: &crate::handler::http::au
     // 使用default组织
     let org_id = "default";
     
-    // 检查用户是否已存在
-    let existing_user = db::user::get(Some(org_id), &email).await?;
+    // 检查用户是否已存在：将“未找到”视为 None，其他错误才中断
+    let existing_user = match db::user::get(Some(org_id), &email).await {
+        Ok(u) => u,
+        Err(e) => {
+            if is_not_found_error(&e) { None } else { return Err(e); }
+        }
+    };
     
     let user = if let Some(existing) = existing_user {
         // 用户已存在，更新信息
@@ -123,4 +128,19 @@ async fn create_new_user(oauth2_user: &crate::handler::http::auth::validator::OA
 // 生成固定盐值
 fn generate_fixed_salt() -> String {
     "fixed_salt_for_oauth2_users".to_string()
+}
+
+// 将底层“未找到”错误统一识别为 not found，用于上层转 None
+fn is_not_found_error(e: &anyhow::Error) -> bool {
+    // 1) SeaORM 语义错误：RecordNotFound
+    if let Some(db_err) = e.downcast_ref::<sea_orm::DbErr>() {
+        if matches!(db_err, sea_orm::DbErr::RecordNotFound(_)) {
+            return true;
+        }
+    }
+    // 2) 字符串兜底匹配（兼容不同封装层）
+    let s = format!("{e:#}");
+    s.contains("Organization user not found")
+        || s.contains("RecordNotFound")
+        || s.contains("not found")
 }
