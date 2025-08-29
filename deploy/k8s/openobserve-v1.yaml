@@ -50,6 +50,8 @@ spec:
                value: postgres
              - name: ZO_META_POSTGRES_DSN
                value: "postgres://yunzai:mars.yunzai@master.ds.svc.cluster.local:5432/mars"
+             - name: ZO_LOCAL_MODE
+               value: "false"
              - name: ZO_S3_PROVIDER
                value: minio
              - name: ZO_S3_SERVER_URL

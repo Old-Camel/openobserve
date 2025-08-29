@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: k8s-log-agent
+  namespace: cloud
+  labels:
+    k8s-app: k8s-log-agent
+    kubernetes.io/cluster-service: "true"
+spec:
+  selector:
+    matchLabels:
+      k8s-app: k8s-log-agent
+      kubernetes.io/cluster-service: "true"
+  template:
+    metadata:
+      labels:
+        k8s-app: k8s-log-agent
+        kubernetes.io/cluster-service: "true"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "2020"
+        prometheus.io/path: /api/v1/metrics/prometheus
+    spec:
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:4.0.5
+          imagePullPolicy: IfNotPresent
+          command: ["/fluent-bit/bin/fluent-bit"]
+          args: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+          ports:
+            - containerPort: 2020
+          resources:
+            limits:
+              cpu: 200m
+              memory: 200Mi
+            requests:
+              cpu: 50m
+              memory: 200Mi
+          env:
+            # CLUSTER_NAME 填写平台名称（可随意填写）
+            - name: CLUSTER_NAME
+              value: "开发测试平台"
+            # OpenObserve 配置
+            - name: OPENOBSERVE_HOST
+              value: "openobserve"
+            - name: OPENOBSERVE_USER
+              value: "admin@admin.com"
+            - name: OPENOBSERVE_PASSWD
+              value: "password"
+            - name: NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: k8s-log-agent-config
+              mountPath: /fluent-bit/etc/
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: k8s-log-agent-config
+          configMap:
+            name: k8s-log-agent-config
+      serviceAccountName: k8s-log-agent
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
