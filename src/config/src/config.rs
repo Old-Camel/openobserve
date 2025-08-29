@@ -578,6 +578,8 @@ pub struct Auth {
     pub root_user_token: String,
     #[env_config(name = "ZO_FIXED_RUM_TOKEN", default = "Xl2kv3XhC9Bb3Fac")]
     pub fixed_rum_token: String,
+    #[env_config(name = "ZO_CLI_USER_COOKIE")]
+    pub cli_user_cookie: String,
     #[env_config(name = "ZO_COOKIE_MAX_AGE", default = 2592000)] // seconds, 30 days
     pub cookie_max_age: i64,
     #[env_config(name = "ZO_COOKIE_SAME_SITE_LAX", default = true)]
@@ -1077,12 +1079,6 @@ pub struct Common {
     )]
     pub result_cache_selection_strategy: String,
     #[env_config(
-        name = "ZO_RESULT_CACHE_DISCARD_DURATION",
-        default = 60,
-        help = "Discard data of last n seconds from cached results"
-    )]
-    pub result_cache_discard_duration: i64,
-    #[env_config(
         name = "ZO_METRICS_CACHE_ENABLED",
         default = true,
         help = "Enable result cache for PromQL metrics queries"
@@ -1130,8 +1126,6 @@ pub struct Common {
     pub use_stream_settings_for_partitions_enabled: bool,
     #[env_config(name = "ZO_DASHBOARD_PLACEHOLDER", default = "_o2_all_")]
     pub dashboard_placeholder: String,
-    #[env_config(name = "ZO_AGGREGATION_CACHE_ENABLED", default = true)]
-    pub aggregation_cache_enabled: bool,
     #[env_config(name = "ZO_AGGREGATION_TOPK_ENABLED", default = true)]
     pub aggregation_topk_enabled: bool,
     #[env_config(name = "ZO_SEARCH_INSPECTOR_ENABLED", default = false)]
@@ -1336,7 +1330,7 @@ pub struct Limit {
     #[env_config(name = "ZO_SEARCH_JOB_SCHEDULE_INTERVAL", default = 10)] // seconds
     pub search_job_scheduler_interval: i64,
     #[env_config(
-        name = "ZO_SEARCH_JOB_RUM_TIMEOUT",
+        name = "ZO_SEARCH_JOB_RUN_TIMEOUT",
         default = 600, // seconds
         help = "Timeout for update check"
     )]
@@ -1501,6 +1495,8 @@ pub struct Limit {
         default = true
     )]
     pub histogram_enabled: bool,
+    #[env_config(name = "ZO_CACHE_DELAY_SECS", default = 300)] // seconds
+    pub cache_delay_secs: i64,
 }
 
 #[derive(EnvConfig, Default)]
@@ -1644,12 +1640,6 @@ pub struct DiskCache {
     pub gc_interval: u64,
     #[env_config(name = "ZO_DISK_CACHE_MULTI_DIR", default = "")] // dir1,dir2,dir3...
     pub multi_dir: String,
-    #[env_config(
-        name = "ZO_DISK_CACHE_DELAY_WINDOW_MINS",
-        default = 10,
-        help = "Delay window indicates the time range from now to skip caching to disk, default is 10 minutes"
-    )]
-    pub delay_window_mins: i64,
 }
 
 #[derive(EnvConfig, Default)]
@@ -1754,6 +1744,12 @@ pub struct Nats {
     pub subscription_capacity: usize,
     #[env_config(name = "ZO_NATS_QUEUE_MAX_AGE", default = 60)] // days
     pub queue_max_age: u64,
+    #[env_config(
+        name = "ZO_NATS_QUEUE_MAX_SIZE",
+        help = "The maximum size of the queue in MB, default is 2048MB",
+        default = 2048
+    )]
+    pub queue_max_size: i64,
 }
 
 #[derive(Debug, Default, EnvConfig)]
@@ -2118,6 +2114,11 @@ pub fn init() -> Config {
         panic!("pipeline config error: {e}");
     }
 
+    // check nats config
+    if let Err(e) = check_nats_config(&mut cfg) {
+        panic!("nats config error: {e}");
+    }
+
     cfg
 }
 
@@ -2417,7 +2418,7 @@ fn check_path_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
             cfg.common.web_url = "auto".to_string();
         }
     }
-    
+
     if cfg.common.web_url.ends_with('/') {
         cfg.common.web_url = cfg.common.web_url.trim_end_matches('/').to_string();
     }
@@ -2610,7 +2611,7 @@ fn check_disk_cache_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
     if cfg.common.is_local_storage
         && !cfg.common.result_cache_enabled
         && !cfg.common.metrics_cache_enabled
-        && !cfg.common.aggregation_cache_enabled
+        && !cfg.common.feature_query_streaming_aggs
     {
         cfg.disk_cache.enabled = false;
     }
@@ -2619,7 +2620,7 @@ fn check_disk_cache_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
     if !cfg.disk_cache.enabled {
         cfg.common.result_cache_enabled = false;
         cfg.common.metrics_cache_enabled = false;
-        cfg.common.aggregation_cache_enabled = false;
+        cfg.common.feature_query_streaming_aggs = false;
         cfg.cache_latest_files.enabled = false;
         cfg.cache_latest_files.delete_merge_files = false;
     }
@@ -2936,6 +2937,14 @@ pub fn get_parquet_compression(compression: &str) -> parquet::basic::Compression
         "zstd" => parquet::basic::Compression::ZSTD(Default::default()),
         _ => parquet::basic::Compression::ZSTD(Default::default()),
     }
+}
+
+fn check_nats_config(cfg: &mut Config) -> Result<(), anyhow::Error> {
+    if cfg.nats.queue_max_size == 0 {
+        cfg.nats.queue_max_size = 2048; // 2GB
+    }
+    cfg.nats.queue_max_size *= 1024 * 1024; // convert to bytes
+    Ok(())
 }
 
 #[cfg(test)]
