@@ -44,7 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/sccache,id=oo-sccache-${TARGETARCH},s
     chmod -R 777 /root/.cache/sccache && \
     if [ "${TARGETARCH}" = "arm64" ]; then \
         echo "[builder] ARM64 build (no sccache) + mimalloc"; \
-        export RUSTFLAGS="-C lto=off "; \
+        export RUSTFLAGS="-C lto=off -C target-feature=+aes,+neon"; \
         export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc; \
         export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
         export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++; \
