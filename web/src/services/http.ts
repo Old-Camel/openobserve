@@ -91,7 +91,8 @@ const http = ({ headers={},baseURL } = {} as any) => {
                     useLocalCurrentUser("", true);
                     useLocalUserInfo("", true);
                     sessionStorage.clear();
-                    window.location.reload();
+                    localStorage.clear();
+                    window.location.href = `/backstage/cas-proxy/app/logout?callback=${encodeURIComponent(window.location.href)}`;
                     return Promise.reject(refreshError);
                   });
                 });

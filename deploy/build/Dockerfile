@@ -20,6 +20,9 @@ FROM public.ecr.aws/zinclabs/rust:bookworm-sccache AS builder
 ARG TARGETARCH
 COPY .cargo/ ./.cargo/
 
+# 为 x86_64-unknown-linux-gnu 目标显式开启 AES+SSE2，限制到 x86-64-v2，避免 native/高阶指令
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C target-cpu=x86-64-v2 -C target-feature=+aes,+sse2"
+
 RUN rustc --version && sccache --version
 
 WORKDIR /openobserve
@@ -41,7 +44,7 @@ RUN --mount=type=cache,target=/root/.cache/sccache,id=oo-sccache-${TARGETARCH},s
     chmod -R 777 /root/.cache/sccache && \
     if [ "${TARGETARCH}" = "arm64" ]; then \
         echo "[builder] ARM64 build (no sccache) + mimalloc"; \
-        export RUSTFLAGS="-C lto=off -C target-feature=+aes,+neon"; \
+        export RUSTFLAGS="-C lto=off "; \
         export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc; \
         export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc; \
         export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++; \
@@ -55,8 +58,7 @@ RUN --mount=type=cache,target=/root/.cache/sccache,id=oo-sccache-${TARGETARCH},s
         true; \
     else \
         echo "[builder] x86_64 build (no sccache)"; \
-        export RUSTFLAGS="-C lto=off -C target-cpu=native"; \
-        # AMD64 禁用 sccache，直接构建 \
+        # AMD64 禁用 sccache，直接构建；gxhash 需求由全局 ENV 满足 \
         unset RUSTC_WRAPPER SCCACHE_NO_DAEMON SCCACHE_DIR SCCACHE_BUCKET SCCACHE_ENDPOINT SCCACHE_REGION SCCACHE_S3_USE_SSL SCCACHE_S3_FORCE_PATH_STYLE SCCACHE_S3_KEY_PREFIX || true; \
         cargo build --release -j 15 --features mimalloc --target x86_64-unknown-linux-gnu; \
         echo "=== AMD64 build output ===" && \
@@ -83,7 +85,7 @@ RUN set -eux; \
     sed -i 's|http://mirrors.aliyun.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources || true; \
     apt-get update; \
     apt-get install -y --no-install-recommends curl htop iftop sysstat procps lsof net-tools; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists*
 
 COPY --from=builder /openobserve/final/openobserve /
 RUN ["/openobserve", "init-dir", "-p", "/data/"]

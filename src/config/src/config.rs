@@ -574,9 +574,9 @@ pub struct Auth {
     pub root_user_email: String,
     #[env_config(name = "ZO_ROOT_USER_PASSWORD", default = "yunzai")]
     pub root_user_password: String,
-    #[env_config(name = "ZO_ROOT_USER_TOKEN")]
+    #[env_config(name = "ZO_ROOT_USER_TOKEN",default = "pLXCUAUvTOxWR6vN")]
     pub root_user_token: String,
-    #[env_config(name = "ZO_FIXED_RUM_TOKEN", default = "")]
+    #[env_config(name = "ZO_FIXED_RUM_TOKEN", default = "Xl2kv3XhC9Bb3Fac")]
     pub fixed_rum_token: String,
     #[env_config(name = "ZO_COOKIE_MAX_AGE", default = 2592000)] // seconds, 30 days
     pub cookie_max_age: i64,

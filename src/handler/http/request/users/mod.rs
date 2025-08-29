@@ -405,6 +405,14 @@ pub async fn authentication(
     // 验证OAuth2 token并获取用户信息
     match crate::handler::http::auth::validator::validate_oauth2_token(&oauth2_token).await {
         Ok(oauth2_user) => {
+            // 生成email并检查冲突
+            let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenant_id);
+            
+            // 检查并清理可能的冲突记录
+            if let Err(e) = crate::service::oauth2_user::check_and_cleanup_oauth2_user(&email).await {
+                log::warn!("清理OAuth2用户冲突时出错: {}", e);
+            }
+            
             // 自动创建或更新用户
             match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
                 Ok(_user) => {
@@ -854,6 +862,14 @@ pub async fn oauth2_login(
     // 验证token并获取用户信息
     match crate::handler::http::auth::validator::validate_oauth2_token(&token).await {
         Ok(oauth2_user) => {
+            // 生成email并检查冲突
+            let email = format!("{}@{}.com", oauth2_user.account, oauth2_user.tenant_id);
+            
+            // 检查并清理可能的冲突记录
+            if let Err(e) = crate::service::oauth2_user::check_and_cleanup_oauth2_user(&email).await {
+                log::warn!("清理OAuth2用户冲突时出错: {}", e);
+            }
+            
             // 自动创建或更新用户
             match crate::service::oauth2_user::create_or_update_oauth2_user(&oauth2_user).await {
                 Ok(user) => {

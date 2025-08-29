@@ -96,7 +96,7 @@ async fn create_new_user(oauth2_user: &crate::handler::http::auth::validator::OA
             name: "default".to_string(),
             token: token.clone(),
             rum_token: Some(rum_token.clone()),
-            role: UserRole::Root,
+            role: UserRole::Admin,
         }],
         is_external: true,
         password_ext: None,
@@ -143,4 +143,39 @@ fn is_not_found_error(e: &anyhow::Error) -> bool {
     s.contains("Organization user not found")
         || s.contains("RecordNotFound")
         || s.contains("not found")
+}
+
+// 清理残留的OAuth2用户记录
+pub async fn cleanup_oauth2_user(email: &str) -> Result<(), anyhow::Error> {
+    log::info!("清理OAuth2用户记录: {}", email);
+    
+    // 删除 org_users 表中的记录
+    match db::org_users::remove_by_user(email).await {
+        Ok(_) => log::info!("成功删除 org_users 表中的记录"),
+        Err(e) => log::warn!("删除 org_users 记录时出错: {}", e),
+    }
+    
+    // 删除 users 表中的记录
+    match db::user::delete(email).await {
+        Ok(_) => log::info!("成功删除 users 表中的记录"),
+        Err(e) => log::warn!("删除 users 记录时出错: {}", e),
+    }
+    
+    Ok(())
+}
+
+// 检查并清理OAuth2用户冲突
+pub async fn check_and_cleanup_oauth2_user(email: &str) -> Result<(), anyhow::Error> {
+    // 检查用户是否存在
+    match db::user::get_db_user(email).await {
+        Ok(_) => {
+            log::warn!("发现已存在的OAuth2用户: {}，正在清理...", email);
+            cleanup_oauth2_user(email).await?;
+        }
+        Err(_) => {
+            log::info!("OAuth2用户不存在: {}", email);
+        }
+    }
+    
+    Ok(())
 }

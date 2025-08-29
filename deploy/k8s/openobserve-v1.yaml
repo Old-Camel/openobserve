@@ -70,8 +70,6 @@ spec:
                value: ${BASE_URL}/openobserve
              - name: ZO_OAUTH2_USERINFO_URL
                value: http://auth:3000/auth/user
-             - name: ZO_FIXED_RUM_TOKEN
-               value: Xl2kv3XhC9Bb3Fac
           imagePullPolicy: Always
           readinessProbe:
             httpGet:

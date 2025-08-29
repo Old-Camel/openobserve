@@ -497,8 +497,8 @@ export default defineComponent({
 
       useLocalCurrentUser("", true);
       useLocalUserInfo("", true);
-
-      this.$router.push("/logout");
+      localStorage.clear();
+      window.location.href = `/backstage/cas-proxy/app/logout?callback=${encodeURIComponent(window.location.href)}`;
     },
     onSubmit() {
       const dismiss = this.$q.notify({

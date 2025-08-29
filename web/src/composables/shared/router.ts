@@ -90,8 +90,9 @@ const useRoutes = () => {
       beforeEnter(to: any, from: any, next: any) {
         useLocalCurrentUser("", true);
         useLocalUserInfo("", true);
+        localStorage.clear();
+        window.location.href = `/backstage/cas-proxy/app/logout?callback=${encodeURIComponent(window.location.href)}`;
 
-        window.location.href = "/login";
       },
     },
     {

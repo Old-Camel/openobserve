@@ -58,7 +58,7 @@ const http = () => {
             store.dispatch("logout");
             localStorage.clear();
             sessionStorage.clear();
-            window.location.reload();
+            window.location.href = `/backstage/cas-proxy/app/logout?callback=${encodeURIComponent(window.location.href)}`;
             break;
           case 404:
             Notify.create({
